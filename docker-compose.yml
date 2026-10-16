@@ -4,7 +4,13 @@
 
 services:
   go-stock:
-    build: .
+    build:
+      context: .
+      # 可选：国内网络可在 .env 中设置镜像源（留空使用官方源）
+      args:
+        GOPROXY: ${GOPROXY:-}
+        NPM_REGISTRY: ${NPM_REGISTRY:-}
+        APT_MIRROR: ${APT_MIRROR:-}
     image: go-stock-web:local
     restart: unless-stopped
     environment:

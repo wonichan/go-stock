@@ -11,7 +11,10 @@ ARG DEBIAN_VERSION=trixie
 FROM node:${NODE_VERSION}-${DEBIAN_VERSION}-slim AS frontend
 WORKDIR /src/frontend
 COPY frontend/package.json frontend/package-lock.json ./
-RUN npm ci --no-audit --no-fund
+# 可选：npm 镜像（如 https://registry.npmmirror.com），留空使用默认源
+ARG NPM_REGISTRY=
+RUN if [ -n "$NPM_REGISTRY" ]; then npm config set registry "$NPM_REGISTRY"; fi \
+ && npm ci --no-audit --no-fund
 COPY frontend/ ./
 RUN npm run build
 
@@ -19,6 +22,9 @@ RUN npm run build
 FROM golang:${GO_VERSION}-${DEBIAN_VERSION} AS backend
 WORKDIR /src
 ENV CGO_ENABLED=0 GOTOOLCHAIN=auto
+# 可选：Go 模块代理（如 https://goproxy.cn,direct），留空使用默认 proxy.golang.org
+ARG GOPROXY=
+ENV GOPROXY=${GOPROXY:-https://proxy.golang.org,direct}
 COPY go.mod go.sum ./
 COPY third_party/ ./third_party/
 RUN --mount=type=cache,target=/go/pkg/mod go mod download
@@ -33,8 +39,11 @@ RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache
 
 # ---------- 3. 运行时 ----------
 FROM debian:${DEBIAN_VERSION}-slim
+# 可选：Debian 镜像主机（如 mirrors.tencent.com），留空使用 deb.debian.org
+ARG APT_MIRROR=
 # hadolint ignore=DL3008
-RUN apt-get update \
+RUN if [ -n "$APT_MIRROR" ]; then sed -i "s#deb.debian.org#${APT_MIRROR}#g" /etc/apt/sources.list.d/debian.sources; fi \
+ && apt-get update \
  && apt-get install -y --no-install-recommends \
       chromium fonts-noto-cjk ca-certificates tzdata curl \
  && rm -rf /var/lib/apt/lists/* \
