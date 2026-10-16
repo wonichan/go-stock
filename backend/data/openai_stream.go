@@ -17,7 +17,7 @@ import (
 	"github.com/duke-git/lancet/v2/random"
 	"github.com/duke-git/lancet/v2/strutil"
 	"github.com/tidwall/gjson"
-	"github.com/wailsapp/wails/v2/pkg/runtime"
+	runtime "go-stock/backend/uiruntime"
 )
 
 // buildUserMessageContent 构造用户消息的 content。

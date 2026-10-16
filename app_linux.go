@@ -17,9 +17,9 @@ import (
 
 	"github.com/duke-git/lancet/v2/convertor"
 	"github.com/duke-git/lancet/v2/strutil"
-	"github.com/gen2brain/beeep"
+	beeep "go-stock/backend/uiruntime/notify"
 	"github.com/wailsapp/wails/v2/pkg/options"
-	"github.com/wailsapp/wails/v2/pkg/runtime"
+	runtime "go-stock/backend/uiruntime"
 )
 
 // startup is called at application startup
