@@ -30,8 +30,8 @@ import {
   Wallet, WarningOutline, TimeOutline, SearchOutline, BookmarkOutline,
 } from '@vicons/ionicons5'
 import {AnalyzeSentiment, GetConfig, GetEffectiveSponsorVip, GetGroupList, GetVersionInfo, IsTradingTime, IsHKTradingTime, IsUSTradingTime} from "../wailsjs/go/main/App";
-import FloatingAiAssistant from "./components/FloatingAiAssistant.vue";
-import FloatingAgentAssistant from "./components/FloatingAgentAssistant.vue";
+// 精简版：移除 AI 助手悬浮面板（FloatingAgentAssistant / FloatingAiAssistant）
+import {slimMenu} from "./slim-config";
 import SignalMonitorPanel from "./components/SignalMonitorPanel.vue";
 import {Dragon, Fire, FirefoxBrowser, Gripfire, Robot} from "@vicons/fa";
 import {Prompt, ReportAnalytics, ReportMoney, ReportSearch, TrendingUp} from "@vicons/tabler";
@@ -56,7 +56,7 @@ const enableAgent = ref(false)
 const enableDarkTheme = ref(darkTheme)
 const content = ref('未经授权,禁止商业目的!\n\n数据来源于网络,仅供参考;投资有风险,入市需谨慎')
 const isFullscreen = ref(false)
-const activeKey = ref('home')
+const activeKey = ref('stock')
 const route = useRoute()
 // 路由变化时同步菜单高亮（如重定向、前进/后退）
 watch(() => route.name, (name) => {
@@ -1346,6 +1346,9 @@ const menuOptions = ref([
   },
 ])
 
+// 精简版：只保留 5 个菜单分区（清单见 slim-config.js）
+menuOptions.value = slimMenu(menuOptions.value)
+
 // 重建"股票自选"菜单的分组子项（保留"全部"，用最新分组列表替换其余子项）
 function refreshStockGroupMenu() {
   GetGroupList().then(result => {
@@ -1716,8 +1719,6 @@ onMounted(() => {
                 :y-offset="150"
                 :rotate="-15"
             >
-<!--              <FloatingAiAssistant />-->
-              <FloatingAgentAssistant />
               <!-- 信号监控面板在 custom 编译中隐藏（与"关于"页面同方向）；
                    普通编译正常显示。v-if 不满足时组件不挂载，后台监控引擎/定时器均不会启动 -->
               <SignalMonitorPanel v-if="!isCustomBuild" />
