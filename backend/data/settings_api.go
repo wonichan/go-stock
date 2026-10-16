@@ -382,6 +382,12 @@ func UpdateConfig(s *SettingConfig) string {
 			"window_width":                  s.WindowWidth,
 			"window_height":                 s.WindowHeight,
 			"prompt_plaza_api_base":         DefaultPromptPlazaApiBase, // 固定值，不信任提交内容
+			// AstrBot 统一推送出口（QQ）。这里是白名单更新，漏加的字段会被静默丢弃，
+			// 症状是 UpdateConfig 返回「保存成功！」但值根本没写进库。
+			"astr_bot_push_enable": s.AstrBotPushEnable,
+			"astr_bot_base_url":    s.AstrBotBaseUrl,
+			"astr_bot_api_key":     s.AstrBotApiKey,
+			"astr_bot_umo":         s.AstrBotUmo,
 			// 注意：long_term_memory_ai_config_id / profile_learn_ai_config_id 不在此更新。
 			// 主设置页（settings.vue）构造的表单不含这两个字段，提交时为零值，
 			// 若在此写库会把知识库页/画像页设置的绑定服务静默重置为 0（自动模式）。

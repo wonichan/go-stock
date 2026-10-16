@@ -19,6 +19,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
+	"os"
 	"strings"
 
 	"go-stock/backend/logger"
@@ -58,6 +60,13 @@ func (a AstrBotAPI) SendToAstrBotByConfig(baseUrl, apiKey, umo, title, message s
 	baseUrl = strings.TrimRight(strings.TrimSpace(baseUrl), "/")
 	apiKey = strings.TrimSpace(apiKey)
 	umo = strings.TrimSpace(umo)
+	// 容器部署最容易踩的坑：AstrBot 在宿主机监听，而容器内的 127.0.0.1 指向容器自身，
+	// 现象是 "dial tcp 127.0.0.1:6185: connect: connection refused"，看不出是地址口径问题。
+	// 这里提前拦下，直接给出可执行的改法。
+	if host := astrBotURLHost(baseUrl); isLoopbackHost(host) && inContainer() {
+		return fmt.Sprintf("AstrBot 服务地址 %s 指向的是容器自身的回环口，容器内连不通；"+
+			"请改成 http://host.docker.internal:6185（compose 里已配好 extra_hosts）", baseUrl)
+	}
 	switch {
 	case baseUrl == "":
 		return "AstrBot 推送未配置服务地址"
@@ -97,4 +106,27 @@ func (a AstrBotAPI) SendToAstrBotByConfig(baseUrl, apiKey, umo, title, message s
 		return "发送 AstrBot 消息失败：" + result
 	}
 	return "发送 AstrBot 消息成功"
+}
+
+// astrBotURLHost 取出 URL 的 host（不含端口）；解析失败返回空串，交给后续请求自行报错。
+func astrBotURLHost(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return ""
+	}
+	return u.Hostname()
+}
+
+func isLoopbackHost(host string) bool {
+	switch host {
+	case "127.0.0.1", "localhost", "::1", "[::1]":
+		return true
+	}
+	return false
+}
+
+// inContainer 判断当前进程是否跑在容器里（Docker 会创建 /.dockerenv）。
+func inContainer() bool {
+	_, err := os.Stat("/.dockerenv")
+	return err == nil
 }

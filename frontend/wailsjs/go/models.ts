@@ -2245,6 +2245,7 @@ export namespace data {
 	    IsDel: number;
 	    Groups: GroupStock[];
 	    AiConfigId: number;
+	    SkillId: string;
 	    EntryPrice: number;
 	    TakeProfitPrice: number;
 	    StopLossPrice: number;
@@ -2270,6 +2271,7 @@ export namespace data {
 	        this.IsDel = source["IsDel"];
 	        this.Groups = this.convertValues(source["Groups"], GroupStock);
 	        this.AiConfigId = source["AiConfigId"];
+	        this.SkillId = source["SkillId"];
 	        this.EntryPrice = source["EntryPrice"];
 	        this.TakeProfitPrice = source["TakeProfitPrice"];
 	        this.StopLossPrice = source["StopLossPrice"];
@@ -3563,6 +3565,10 @@ export namespace data {
 	    longTermMemoryAiConfigId: number;
 	    profileLearnAiConfigId: number;
 	    signalScanIntervalSec: number;
+	    astrBotPushEnable: boolean;
+	    astrBotBaseUrl: string;
+	    astrBotApiKey: string;
+	    astrBotUmo: string;
 	    aiConfigs: AIConfig[];
 	
 	    static createFrom(source: any = {}) {
@@ -3656,6 +3662,10 @@ export namespace data {
 	        this.longTermMemoryAiConfigId = source["longTermMemoryAiConfigId"];
 	        this.profileLearnAiConfigId = source["profileLearnAiConfigId"];
 	        this.signalScanIntervalSec = source["signalScanIntervalSec"];
+	        this.astrBotPushEnable = source["astrBotPushEnable"];
+	        this.astrBotBaseUrl = source["astrBotBaseUrl"];
+	        this.astrBotApiKey = source["astrBotApiKey"];
+	        this.astrBotUmo = source["astrBotUmo"];
 	        this.aiConfigs = this.convertValues(source["aiConfigs"], AIConfig);
 	    }
 	

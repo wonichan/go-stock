@@ -11,6 +11,9 @@ services:
         GOPROXY: ${GOPROXY:-}
         NPM_REGISTRY: ${NPM_REGISTRY:-}
         APT_MIRROR: ${APT_MIRROR:-}
+        # 前端 vite 构建实测需 ~3GB 堆，而 Dockerfile 默认给 4096MB —— 在 3.6GB 内存的
+        # 机器上直接用默认值会把整机打爆（2026-10-17 实测死机）。压到 3072，不够可调大。
+        NODE_MAX_OLD_SPACE: ${NODE_MAX_OLD_SPACE:-3072}
     image: go-stock-web:local
     restart: unless-stopped
     environment:
@@ -33,6 +36,10 @@ services:
     ports:
       - "127.0.0.1:8080:8080"
     networks: [internal]
+    # AstrBot 跑在宿主机、监听 0.0.0.0:6185；而容器内的 127.0.0.1 是容器自己，
+    # 所以推送地址必须写 host.docker.internal，这里把它映射到宿主网关。
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   cloudflared:
     image: cloudflare/cloudflared:latest

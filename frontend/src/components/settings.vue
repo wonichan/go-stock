@@ -109,7 +109,9 @@ const formValue = ref({
   },
   astrBotPush: {
     enable: false,
-    baseUrl: 'http://127.0.0.1:6185',
+    // 容器部署时 AstrBot 在宿主机上，容器内的 127.0.0.1 是容器自己，必须走 host.docker.internal；
+    // 桌面（Wails）版直接跑在宿主机，那时才填 http://127.0.0.1:6185。
+    baseUrl: 'http://host.docker.internal:6185',
     apiKey: '',
     umo: ''
   },
