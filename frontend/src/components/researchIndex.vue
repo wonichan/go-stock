@@ -7,25 +7,20 @@ import AiRecommendStocksList from "./aiRecommendStocksList.vue";
 import PromptTemplateList from "./promptTemplateList.vue";
 import AllStockList from "./allStockList.vue";
 import AllStockInfoList from "./allStockInfoList.vue";
-import CronTaskManager from "./cron-task-manager.vue";
 import TradingRecordManager from "./TradingRecordManager.vue";
-import StockChangesMonitor from "./stockChangesMonitor.vue";
-import MCPServiceManager from "./mcp-server-manager.vue";
-import SkillManager from "./skill-manager.vue";
 import UplimitLadder from "./uplimitLadder.vue";
-import PromptPlaza from "./promptPlaza.vue";
-import PromptQa from "./promptQa.vue";
 import SelectStock from "./SelectStock.vue";
 import DailyOperationPlan from "./DailyOperationPlan.vue";
-import KnowledgeBaseManager from "./knowledge-base-manager.vue";
 import {EventsOff, EventsOn} from "../../wailsjs/runtime";
 import {useRoute} from 'vue-router'
+// 精简版：定时任务/MCP服务/技能管理/知识库管理/异动监控/提示词广场/问答广场 标签页已移除（见 ../slim-config.js）
+import {KEPT_RESEARCH_TABS} from "../slim-config";
 
 
 const nowTab = ref("AI分析报告")
 const route = useRoute()
 onBeforeMount(() => {
-  nowTab.value = route.query.name
+  updateTab(route.query.name)
 })
 
 onBeforeUnmount(() => {
@@ -41,7 +36,8 @@ EventsOn("changeResearchTab", async (msg) => {
   updateTab(msg.name)
 })
 function updateTab(name) {
-  nowTab.value = name
+  // 未知或已移除的标签页回落到第一个保留标签
+  nowTab.value = KEPT_RESEARCH_TABS.includes(name) ? name : KEPT_RESEARCH_TABS[0]
 }
 </script>
 
@@ -54,29 +50,17 @@ function updateTab(name) {
       <n-tab-pane name="股票推荐记录">
         <AiRecommendStocksList/>
       </n-tab-pane>
-      <n-tab-pane name="异动监控">
-        <StockChangesMonitor/>
-      </n-tab-pane>
       <n-tab-pane name="涨停梯队">
         <UplimitLadder/>
       </n-tab-pane>
       <n-tab-pane name="提示词模板">
         <PromptTemplateList/>
       </n-tab-pane>
-      <n-tab-pane name="提示词广场">
-        <PromptPlaza/>
-      </n-tab-pane>
-      <n-tab-pane name="问答广场">
-        <PromptQa/>
-      </n-tab-pane>
       <n-tab-pane name="形态选股">
         <AllStockList/>
       </n-tab-pane>
       <n-tab-pane name="指标选股">
         <SelectStock/>
-      </n-tab-pane>
-      <n-tab-pane name="定时任务">
-        <CronTaskManager />
       </n-tab-pane>
       <n-tab-pane name="交易日志">
         <TradingRecordManager />
@@ -87,15 +71,6 @@ function updateTab(name) {
 <!--      <n-tab-pane name="全部股票信息">-->
 <!--        <AllStockInfoList/>-->
 <!--      </n-tab-pane>-->
-      <n-tab-pane name="MCP服务">
-        <MCPServiceManager/>
-      </n-tab-pane>
-      <n-tab-pane name="技能管理">
-        <SkillManager/>
-      </n-tab-pane>
-      <n-tab-pane name="知识库管理">
-        <KnowledgeBaseManager/>
-      </n-tab-pane>
     </n-tabs>
   </n-card>
 </template>
