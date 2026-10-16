@@ -4,7 +4,7 @@ import (
 	"context"
 	"sync"
 
-	"github.com/wailsapp/wails/v2/pkg/runtime"
+	runtime "go-stock/backend/uiruntime"
 )
 
 // @Author spark

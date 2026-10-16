@@ -1,0 +1,9 @@
+.git
+.github
+**/node_modules
+frontend/dist
+build/bin
+data
+logs
+*.log
+PR_BODY.md

@@ -39,7 +39,7 @@ import (
 	"github.com/duke-git/lancet/v2/slice"
 	"github.com/duke-git/lancet/v2/strutil"
 	"github.com/robfig/cron/v3"
-	"github.com/wailsapp/wails/v2/pkg/runtime"
+	runtime "go-stock/backend/uiruntime"
 )
 
 // App struct
@@ -369,7 +369,8 @@ func (a *App) CheckUpdate(flag int) {
 
 	// 定制版本：不检查新版本、不启用自动更新（启动检查/定时检查/手动检查均在此拦截），
 	// 仅保留赞助码解密与 VIP 等级判定（VIP2 及以上仍同步资讯）
-	if CustomBuild {
+	// Web 服务构建同样不做自更新（通过重新构建镜像升级），赞助码/VIP 判定逻辑保持不变
+	if CustomBuild || runtime.IsServerMode() {
 		if _, vipLevel, ok := a.isVip(sponsorCode, "", &models.GitHubReleaseVersion{}); ok {
 			level, _ := convertor.ToInt(vipLevel)
 			a.VipLevel = level

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"go-stock/backend/logger"
+	"go-stock/backend/uiruntime"
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/chromedp/chromedp"
@@ -365,6 +366,7 @@ func cleanText(text string) string {
 }
 
 func getStealthAllocator(ctx context.Context, path string, headless bool) (context.Context, context.CancelFunc) {
+	headless = headless || uiruntime.ServerMode // Web 服务模式下强制无头
 	opts := append(chromedp.DefaultExecAllocatorOptions[:],
 		chromedp.ExecPath(path),
 		chromedp.Flag("headless", headless),

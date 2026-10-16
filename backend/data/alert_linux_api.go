@@ -6,7 +6,7 @@ package data
 import (
 	"go-stock/backend/logger"
 
-	"github.com/gen2brain/beeep"
+	beeep "go-stock/backend/uiruntime/notify"
 )
 
 // AlertWindowsApi Linux 实现：通过 beeep（D-Bus/notify-send）发送桌面通知。

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/wailsapp/wails/v2/pkg/runtime"
+	runtime "go-stock/backend/uiruntime"
 
 	"go-stock/backend/data"
 	"go-stock/backend/logger"

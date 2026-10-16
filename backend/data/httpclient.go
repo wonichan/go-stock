@@ -47,7 +47,7 @@ func init() {
 		Timeout:   300 * time.Second,
 	}
 
-	SharedHTTPClient = resty.NewWithClient(sharedHTTPClient).
+	SharedHTTPClient = withHTTPSUpgrade(resty.NewWithClient(sharedHTTPClient)).
 		SetRetryCount(0).
 		SetTimeout(300 * time.Second)
 }
@@ -114,7 +114,7 @@ func CreateHTTPClientWithTimeout(timeout time.Duration) *resty.Client {
 		Timeout:   timeout,
 	}
 
-	return resty.NewWithClient(httpClient).
+	return withHTTPSUpgrade(resty.NewWithClient(httpClient)).
 		SetTimeout(timeout).
 		SetRetryCount(0)
 }
@@ -130,7 +130,7 @@ func CreateProxiedHTTPClient(timeout time.Duration, proxyURL string) *resty.Clie
 		}
 	}
 	httpClient := &http.Client{Transport: tr, Timeout: timeout}
-	return resty.NewWithClient(httpClient).
+	return withHTTPSUpgrade(resty.NewWithClient(httpClient)).
 		SetTimeout(timeout).
 		SetRetryCount(0)
 }

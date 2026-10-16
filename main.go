@@ -29,7 +29,7 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/mac"
 	"github.com/wailsapp/wails/v2/pkg/options/windows"
-	"github.com/wailsapp/wails/v2/pkg/runtime"
+	runtime "go-stock/backend/uiruntime"
 )
 
 //go:embed frontend/dist
@@ -114,6 +114,11 @@ func main() {
 
 	// Create an instance of the app structure
 	app := NewApp()
+	// Web 服务构建（-tags server）：不创建 Wails 窗口，改由 HTTP/WebSocket 提供界面，见 main_server.go
+	if runServer != nil {
+		runServer(app)
+		return
+	}
 	AppMenu := menu.NewMenu()
 	if IsMacOS() {
 		AppMenu.Append(menu.EditMenu())
