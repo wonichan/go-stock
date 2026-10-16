@@ -16,7 +16,9 @@ ARG NPM_REGISTRY=
 RUN if [ -n "$NPM_REGISTRY" ]; then npm config set registry "$NPM_REGISTRY"; fi \
  && npm ci --no-audit --no-fund
 COPY frontend/ ./
-RUN npm run build
+# Vite 打包在小内存机器上会触发 Node 默认堆上限（JavaScript heap out of memory），显式放宽
+ARG NODE_MAX_OLD_SPACE=4096
+RUN NODE_OPTIONS="--max-old-space-size=${NODE_MAX_OLD_SPACE}" npm run build
 
 # ---------- 2. 后端（-tags server，无 webkit/CGO） ----------
 FROM golang:${GO_VERSION}-${DEBIAN_VERSION} AS backend
