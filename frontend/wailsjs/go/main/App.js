@@ -1514,6 +1514,10 @@ export function TestFeishuNotice(arg1, arg2, arg3) {
   return window['go']['main']['App']['TestFeishuNotice'](arg1, arg2, arg3);
 }
 
+export function TestAstrBotNotice(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['TestAstrBotNotice'](arg1, arg2, arg3, arg4);
+}
+
 export function TestMCPServer(arg1) {
   return window['go']['main']['App']['TestMCPServer'](arg1);
 }

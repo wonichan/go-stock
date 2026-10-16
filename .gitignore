@@ -109,6 +109,7 @@ ai-doc
 .qoder
 .idea/
 /data/*.db*
+/data/xunlongjue/
 ai-assistant-web/data/*.db*
 *.exe
 /build/bin/*

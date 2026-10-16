@@ -88,10 +88,20 @@ func AgentMetaFromCtx(ctx context.Context) (AgentMeta, bool) {
 	return meta, ok
 }
 
-// recommendSavedFlag 本轮是否已通过推荐工具保存过推荐记录。
+// RecommendPick 本轮推荐工具写入的选股（代码 / 名称）。
+// 记录在跟踪器里，供 agent 收尾时把技能来源的选股自动加入自选
+// （见 agent/auto_recommend_saver.go 的 autoFollowSkillPicks）。
+type RecommendPick struct {
+	Code string
+	Name string
+}
+
+// recommendSavedFlag 本轮是否已通过推荐工具保存过推荐记录，以及保存了哪些选股。
 // context.WithValue 存指针使其可变：工具 InvokableRun 置位，agent 收尾处读取。
 type recommendSavedFlag struct {
-	v atomic.Bool
+	v     atomic.Bool
+	mu    sync.Mutex
+	picks []RecommendPick
 }
 
 type recommendSavedCtxKey struct{}
@@ -108,12 +118,39 @@ func MarkRecommendSaved(ctx context.Context) {
 	}
 }
 
+// MarkRecommendPicks 记录本轮推荐工具写入的选股，供收尾时把技能来源的选股自动加入自选。
+// 与 MarkRecommendSaved 一样，未注入跟踪器时为空操作。
+func MarkRecommendPicks(ctx context.Context, picks []RecommendPick) {
+	if len(picks) == 0 {
+		return
+	}
+	f, ok := ctx.Value(recommendSavedCtxKey{}).(*recommendSavedFlag)
+	if !ok {
+		return
+	}
+	f.mu.Lock()
+	f.picks = append(f.picks, picks...)
+	f.mu.Unlock()
+}
+
+// RecommendPicksThisTurn 返回本轮推荐工具写入的选股（按写入顺序；可能为空）。
+func RecommendPicksThisTurn(ctx context.Context) []RecommendPick {
+	f, ok := ctx.Value(recommendSavedCtxKey{}).(*recommendSavedFlag)
+	if !ok {
+		return nil
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := make([]RecommendPick, len(f.picks))
+	copy(out, f.picks)
+	return out
+}
+
 // RecommendSavedThisTurn 本轮是否已通过推荐工具保存过推荐记录。
 func RecommendSavedThisTurn(ctx context.Context) bool {
 	f, ok := ctx.Value(recommendSavedCtxKey{}).(*recommendSavedFlag)
 	return ok && f.v.Load()
 }
-
 type DataToolWrapper struct {
 	name        string
 	description string
@@ -154,6 +191,9 @@ func (t *DataToolWrapper) InvokableRun(ctx context.Context, argumentsInJSON stri
 	if t.name == "CreateAiRecommendStocks" || t.name == "BatchCreateAiRecommendStocks" {
 		// 标记本轮已通过工具保存推荐记录：收尾的回复自动保存据此跳过，避免重复入库
 		MarkRecommendSaved(ctx)
+		// 记录本轮写入的选股：主路径（模型调用了推荐工具）下，agent 收尾仍要把
+		// 技能来源的选股自动加入自选，选股从这里取（见 auto_recommend_saver.go）。
+		MarkRecommendPicks(ctx, extractRecommendPicks(t.name, argumentsInJSON))
 		if meta, ok := AgentMetaFromCtx(ctx); ok {
 			if injected := injectRecommendMeta(t.name, argumentsInJSON, meta); injected != "" {
 				argumentsInJSON = injected
@@ -221,6 +261,37 @@ func injectRecommendMeta(toolName, argsJSON string, meta AgentMeta) string {
 		return ""
 	}
 	return string(bytes)
+}
+
+// extractRecommendPicks 从推荐工具的参数中提取选股代码与名称。
+// BatchCreateAiRecommendStocks 的参数形如 {"stocks":[{"stockCode":..,"stockName":..}]}，
+// CreateAiRecommendStocks 为单个对象。解析失败返回 nil（不影响工具执行与入库）。
+func extractRecommendPicks(toolName, argsJSON string) []RecommendPick {
+	parse := func(raw string) []RecommendPick {
+		if strings.TrimSpace(raw) == "" {
+			return nil
+		}
+		var recs []models.AiRecommendStocks
+		if err := json.Unmarshal([]byte(raw), &recs); err != nil {
+			var one models.AiRecommendStocks
+			if err2 := json.Unmarshal([]byte(raw), &one); err2 != nil {
+				return nil
+			}
+			recs = []models.AiRecommendStocks{one}
+		}
+		out := make([]RecommendPick, 0, len(recs))
+		for _, r := range recs {
+			if strings.TrimSpace(r.StockCode) == "" {
+				continue
+			}
+			out = append(out, RecommendPick{Code: r.StockCode, Name: r.StockName})
+		}
+		return out
+	}
+	if toolName == "BatchCreateAiRecommendStocks" {
+		return parse(gjson.Get(argsJSON, "stocks").String())
+	}
+	return parse(argsJSON)
 }
 
 func thsResultToMarkdown(res map[string]any, title string) string {

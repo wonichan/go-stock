@@ -170,6 +170,48 @@ func NthTradingDayAfter(start time.Time, n int) (time.Time, error) {
 	return t, nil
 }
 
+// PrevTradingDayBefore 返回 start 之前（不含 start 当日）的第 1 个 A 股交易日。
+// 与 NextTradingDayAfter 对称，用于「最近 N 个交易日」窗口的向前回溯。
+// 注意：不要用 prevTradeDate（只跳周末、不处理法定节假日）。
+func PrevTradingDayBefore(start time.Time, maxDays int) (time.Time, error) {
+	if maxDays <= 0 {
+		maxDays = 30
+	}
+	failCount := 0
+	for i := 1; i <= maxDays; i++ {
+		d := start.AddDate(0, 0, -i)
+		trading, _, _, err := IsTradingDayInfo(d)
+		if err != nil {
+			failCount++
+			if failCount >= 3 {
+				return time.Time{}, err
+			}
+			continue
+		}
+		failCount = 0
+		if trading {
+			return d, nil
+		}
+	}
+	return time.Time{}, fmt.Errorf("过去%d天内未找到交易日", maxDays)
+}
+
+// NthTradingDayBefore 返回 start 之前（不含 start 当日）的第 n 个 A 股交易日。
+func NthTradingDayBefore(start time.Time, n int) (time.Time, error) {
+	if n <= 0 {
+		n = 1
+	}
+	t := start
+	for i := 0; i < n; i++ {
+		prev, err := PrevTradingDayBefore(t, 400)
+		if err != nil {
+			return time.Time{}, err
+		}
+		t = prev
+	}
+	return t, nil
+}
+
 // HolidayInfoOn 查询某日节假日条目（供批量查询使用）：优先年表，降级单日接口。
 // 找不到条目（普通工作日/周末）时返回 nil 而非错误。
 func HolidayInfoOn(t time.Time) (*HolidayDayInfo, error) {

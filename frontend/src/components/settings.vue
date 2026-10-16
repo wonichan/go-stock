@@ -9,6 +9,7 @@ import {
   GetPromptTemplates,
   TestDingDingNotice,
   TestFeishuNotice,
+  TestAstrBotNotice,
   StartFeishuBot,
   StopFeishuBot,
   GetFeishuBotStatus,
@@ -105,6 +106,12 @@ const formValue = ref({
     enable: false,
     feishuRobot: '',
     feishuSecret: ''
+  },
+  astrBotPush: {
+    enable: false,
+    baseUrl: 'http://127.0.0.1:6185',
+    apiKey: '',
+    umo: ''
   },
   feishuBot: {
     enable: false,
@@ -250,6 +257,12 @@ onMounted(() => {
       feishuRobot: res.feishuRobot,
       feishuSecret: res.feishuSecret
     }
+    formValue.value.astrBotPush = {
+      enable: res.astrBotPushEnable === true,
+      baseUrl: res.astrBotBaseUrl || '',
+      apiKey: res.astrBotApiKey || '',
+      umo: res.astrBotUmo || ''
+    }
     formValue.value.feishuBot = {
       enable: res.feishuBotEnable,
       appId: res.feishuAppId || '',
@@ -353,6 +366,10 @@ function saveConfig() {
     feishuPushEnable: formValue.value.feishuPush.enable,
     feishuRobot: formValue.value.feishuPush.feishuRobot,
     feishuSecret: formValue.value.feishuPush.feishuSecret,
+    astrBotPushEnable: formValue.value.astrBotPush.enable,
+    astrBotBaseUrl: formValue.value.astrBotPush.baseUrl,
+    astrBotApiKey: formValue.value.astrBotPush.apiKey,
+    astrBotUmo: formValue.value.astrBotPush.umo,
     feishuBotEnable: formValue.value.feishuBot.enable,
     feishuAppId: formValue.value.feishuBot.appId,
     feishuAppSecret: formValue.value.feishuBot.appSecret,
@@ -518,6 +535,34 @@ function sendFeishuTestNotice() {
   })
 }
 
+function sendAstrBotTestNotice() {
+  // 测试通知使用页面上当前填写的 AstrBot 地址/密钥/会话标识，不依赖已保存的数据库配置
+  const baseUrl = (formValue.value.astrBotPush.baseUrl || '').trim()
+  const apiKey = (formValue.value.astrBotPush.apiKey || '').trim()
+  const umo = (formValue.value.astrBotPush.umo || '').trim()
+  if (!baseUrl) {
+    message.warning('请先填写 AstrBot 服务地址')
+    return
+  }
+  if (!apiKey) {
+    message.warning('请先填写 AstrBot API Key')
+    return
+  }
+  if (!umo) {
+    message.warning('请先填写推送目标会话标识 umo')
+    return
+  }
+  const now = new Date()
+  const msg = '### go-stock AstrBot 测试\n\n' + now + '\n\n如果你看到这条消息，说明推送出口已打通。'
+  TestAstrBotNotice(baseUrl, apiKey, umo, msg).then(res => {
+    if (res && res.includes('失败')) {
+      message.error(res)
+    } else {
+      message.info(res)
+    }
+  })
+}
+
 // 飞书应用机器人控制函数（与 feishuPush 自定义机器人推送独立）
 async function startFeishuBot() {
   // 先保存配置，确保最新 appID/appSecret/aiConfigId 已写入
@@ -620,6 +665,12 @@ function importConfig() {
         enable: config.feishuPushEnable,
         feishuRobot: config.feishuRobot,
         feishuSecret: config.feishuSecret
+      }
+      formValue.value.astrBotPush = {
+        enable: config.astrBotPushEnable === true,
+        baseUrl: config.astrBotBaseUrl || '',
+        apiKey: config.astrBotApiKey || '',
+        umo: config.astrBotUmo || ''
       }
       formValue.value.feishuBot = {
         enable: config.feishuBotEnable,
@@ -973,6 +1024,9 @@ function deletePrompt(ID) {
             <n-form-item-gi :span="3" label="飞书推送：" path="feishuPush.enable">
               <n-switch v-model:value="formValue.feishuPush.enable"/>
             </n-form-item-gi>
+            <n-form-item-gi :span="3" label="AstrBot 推送：" path="astrBotPush.enable">
+              <n-switch v-model:value="formValue.astrBotPush.enable"/>
+            </n-form-item-gi>
             <n-form-item-gi :span="3" label="本地推送：" path="localPush.enable">
               <n-switch v-model:value="formValue.localPush.enable"/>
             </n-form-item-gi>
@@ -1006,6 +1060,23 @@ function deletePrompt(ID) {
                        placeholder="可选：填写机器人安全设置的签名校验 Secret，留空则不签名"
                        v-model:value="formValue.feishuPush.feishuSecret"/>
               <n-button type="primary" @click="sendFeishuTestNotice">发送测试通知</n-button>
+            </n-form-item-gi>
+            <n-form-item-gi :span="22" v-if="formValue.astrBotPush.enable" label="AstrBot 服务地址："
+                            path="astrBotPush.baseUrl">
+              <n-input placeholder="如 http://127.0.0.1:6185；go-stock 跑在容器里时用 http://host.docker.internal:6185"
+                       v-model:value="formValue.astrBotPush.baseUrl"/>
+            </n-form-item-gi>
+            <n-form-item-gi :span="22" v-if="formValue.astrBotPush.enable" label="AstrBot API Key："
+                            path="astrBotPush.apiKey">
+              <n-input type="password" show-password-on="click"
+                       placeholder="AstrBot 面板 API 页签生成的 Key"
+                       v-model:value="formValue.astrBotPush.apiKey"/>
+            </n-form-item-gi>
+            <n-form-item-gi :span="22" v-if="formValue.astrBotPush.enable" label="推送目标会话标识 umo："
+                            path="astrBotPush.umo">
+              <n-input placeholder="形如 爱酱:FriendMessage:<openid>；QQ 单聊的 session_id 是 openid，不是 QQ 号"
+                       v-model:value="formValue.astrBotPush.umo"/>
+              <n-button type="primary" @click="sendAstrBotTestNotice">发送测试通知</n-button>
             </n-form-item-gi>
 
           </n-grid>

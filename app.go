@@ -1922,8 +1922,11 @@ func MonitorFollowedStockCostPrices(a *App) {
 		return
 	}
 
+	// 取全部自选股：除成本价预警外，顺带把现价/涨跌幅回写到 followed_stock。
+	// Q8=B3：price/change_percent/price_change 只在 Follow() 建档时写死为 0，
+	// 没有这条回写路径时自选列表的涨跌幅恒为 0（见 data/followed_stock_quote.go）。
 	var followedStocks []data.FollowedStock
-	db.Dao.Model(&data.FollowedStock{}).Where("cost_price > 0 AND is_del = 0").Find(&followedStocks)
+	db.Dao.Model(&data.FollowedStock{}).Where("is_del = 0").Find(&followedStocks)
 
 	if len(followedStocks) == 0 {
 		return
@@ -1942,6 +1945,10 @@ func MonitorFollowedStockCostPrices(a *App) {
 		logger.SugaredLogger.Errorf("获取自选股实时数据失败: %v", err)
 		return
 	}
+
+	// 回写现价/涨跌幅/涨跌额。不回写 time：那是「加入自选时间」，
+	// 脚本来源自选股的「只保留最近 N 个交易日」修剪依赖它。
+	data.UpdateFollowedStockQuotes(followedStocks, stockData)
 
 	for _, stockInfo := range *stockData {
 		followedStock, ok := stockMap[tools.GetStockCode(stockInfo.Code)]
@@ -2272,6 +2279,12 @@ func (a *App) TestDingDingNotice(message string, dingRobot string) string {
 // TestFeishuNotice 使用设置页当前填写的飞书机器人地址与签名密钥发送测试通知（不读取数据库配置）
 func (a *App) TestFeishuNotice(message string, feishuRobot string, feishuSecret string) string {
 	return data.NewFeishuAPI().SendFeishuMessageByRobot(message, feishuRobot, feishuSecret)
+}
+
+// TestAstrBotNotice 使用设置页当前填写的 AstrBot 服务地址 / API Key / 会话标识发送测试通知
+// （不读取数据库配置，便于保存前先验证连通性）
+func (a *App) TestAstrBotNotice(baseUrl string, apiKey string, umo string, message string) string {
+	return data.NewAstrBotAPI().SendToAstrBotByConfig(baseUrl, apiKey, umo, "", message)
 }
 
 // SendFeishuMessage 发送飞书自定义机器人消息（带 5 分钟去重缓存）
@@ -3923,7 +3936,7 @@ func (a *App) InitCronTasks() {
 	if !cronApi.ExistsByTaskType("morning_strategy") {
 		task := &models.CronTask{
 			Name:        "盘前策略",
-			CronExpr:    "0 0 9 * * 1-5", // 交易日 09:00
+			CronExpr:    "30 9 * * 1-5", // 交易日 09:30：寻龙诀 09:26 采集竞价一进二结果后再生成策略
 			TaskType:    "morning_strategy",
 			Enable:      true,
 			Status:      "active",
@@ -4266,6 +4279,28 @@ func (a *App) GenerateMorningStrategyNow(date string, aiConfigId int, sysPromptI
 		}
 	}()
 	return "盘前策略生成中，完成后将自动展示"
+}
+
+// PickAStock
+//
+//	@Description: 选好票（Q9=S1）：用【七维选股策略】提示词跑一轮 AI 分析，
+//	              选出的个股写入「研究中心-股票推荐记录」并自动加入自选（TOP5）。
+//	              供寻龙诀 skill 通过 Web API 调用；同步返回（Q19：实测约 4 分钟）。
+//	@param aiConfigId AI 配置 ID（0=使用第一个 AI 配置）
+//	@param sysPromptId 系统提示词模板 ID（0=按名字解析【七维选股策略】）
+//	@param agentMode AI 分析模式（""=自动/react/plan_execute/deepagents）
+//	@return 结果 JSON（date/skillId/sysPromptId/durationMs/report/picks/recordCount/followed）
+func (a *App) PickAStock(aiConfigId int, sysPromptId int, agentMode string) (string, error) {
+	result, err := agent.NewXunlongjuePickApi().PickAStock(a.ctx, aiConfigId, sysPromptId, agentMode)
+	if err != nil {
+		logger.SugaredLogger.Errorf("选好票失败：%v", err)
+		return "", err
+	}
+	b, err := json.Marshal(result)
+	if err != nil {
+		return "", err
+	}
+	return string(b), nil
 }
 
 // GetMorningStrategyByDate 按日期查询盘前策略

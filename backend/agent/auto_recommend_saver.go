@@ -44,7 +44,12 @@ func isPromptBacktestCall(question, sysPrompt string) bool {
 }
 
 // autoSaveRecommendRecords 在每轮 AI 分析收尾时调用：解析最终回复中的推荐 JSON
-// 契约并保存。本轮已通过推荐工具保存过（RecommendSavedThisTurn）则跳过，避免重复。
+// 契约并保存，并执行「技能来源选股自动加入自选」。
+//
+// 两条保存路径：
+//   - 主路径：模型按指令调用推荐工具（tools.RecommendSavedThisTurn==true），推荐记录
+//     已由工具写入，本函数不再解析回复做兜底保存，但要补走自动加入自选；
+//   - 兜底路径：本轮未调用推荐工具，解析回复中的 JSON 契约入库。
 func autoSaveRecommendRecords(ctx context.Context, question, response string) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -52,14 +57,7 @@ func autoSaveRecommendRecords(ctx context.Context, question, response string) {
 		}
 	}()
 
-	if strings.TrimSpace(response) == "" {
-		return
-	}
-	// 本轮已调用推荐工具保存 → 模型走主路径，无需兜底
-	if tools.RecommendSavedThisTurn(ctx) {
-		return
-	}
-	// 回测场景：选股入库由回测引擎负责。
+	// 回测场景：选股入库由回测引擎负责，且不能把模拟历史选股塞进自选。
 	// 优先取 AgentMeta 中的显式标记（不可伪造）；字符串启发式仅作未透传时的兜底。
 	meta, hasMeta := tools.AgentMetaFromCtx(ctx)
 	if hasMeta && meta.IsPromptBacktest {
@@ -69,6 +67,17 @@ func autoSaveRecommendRecords(ctx context.Context, question, response string) {
 		return
 	}
 	if hasMeta && isPromptBacktestCall(question, meta.SystemPrompt) {
+		return
+	}
+
+	// 主路径：模型已调用推荐工具写入推荐记录，无需兜底保存。
+	// 但技能来源的自动加入自选仍要执行（选股从工具写入跟踪器取），因此不能直接 return。
+	if tools.RecommendSavedThisTurn(ctx) {
+		followSkillPicksFromTool(ctx, meta, hasMeta)
+		return
+	}
+
+	if strings.TrimSpace(response) == "" {
 		return
 	}
 
@@ -136,6 +145,12 @@ func autoSaveRecommendRecords(ctx context.Context, question, response string) {
 		return
 	}
 	logger.SugaredLogger.Infof("已自动保存 %d 条 AI 推荐记录（本轮未调用推荐工具，走 JSON 契约兜底）", len(recommends))
+
+	// 技能来源的选股结果：额外把 TOP N 自动加入自选，并按窗口滚动清理脚本来源的自选股。
+	// 只在技能场景（用户显式选了技能目录）触发，避免普通闲聊里恰好出现的 JSON 契约把股票塞进自选。
+	if hasMeta && strings.TrimSpace(meta.SkillId) != "" {
+		autoFollowSkillPicks(ordered, meta.SkillId, now)
+	}
 }
 
 // fetchPickRealtimePrices 批量拉取选股的实时行情，key 为 tools.GetStockCode 归一化代码
@@ -241,4 +256,87 @@ func matchJSONArray(s string, start int) int {
 		}
 	}
 	return -1
+}
+
+// autoFollowTopN 技能选股自动加入自选的条数上限（按推荐顺序取前 N）。
+const autoFollowTopN = 5
+
+// followedStockKeepTradingDays 「自选股只保留最近 N 个交易日」的滚动窗口长度。
+// 语义与清理规则见 data.PruneScriptFollowedStocks / data.FollowedStockWindowStart：
+// 自加入之日起最多保留 5 个交易日，只清理带 skill_id 来源标记的记录。
+const followedStockKeepTradingDays = 5
+
+// autoFollowSkillPicks 把技能产出的选股结果按顺序取前 autoFollowTopN 只加入自选，
+// 随后按窗口滚动清理脚本来源的自选股。全流程只记日志，失败不影响主流程。
+func autoFollowSkillPicks(picks []*promptBacktestPickJSON, skillId string, now time.Time) {
+	defer func() {
+		if r := recover(); r != nil {
+			logger.SugaredLogger.Errorf("autoFollowSkillPicks panic: %v", r)
+		}
+	}()
+
+	created, refreshed := 0, 0
+	for i, p := range picks {
+		if i >= autoFollowTopN {
+			break
+		}
+		code := normalizePickCode(p.Code)
+		if code == "" {
+			continue
+		}
+		didCreate, didRefresh, err := data.FollowStockWithSource(code, p.Name, skillId, now)
+		if err != nil {
+			logger.SugaredLogger.Errorf("自动加入自选失败 %s: %v", code, err)
+			continue
+		}
+		if didCreate {
+			created++
+		}
+		if didRefresh {
+			refreshed++
+		}
+	}
+	if created > 0 || refreshed > 0 {
+		logger.SugaredLogger.Infof("技能[%s]选股结果已加入自选：新增 %d 只，刷新窗口计时 %d 只", skillId, created, refreshed)
+	}
+	if n, err := data.PruneScriptFollowedStocks(now, followedStockKeepTradingDays); err != nil {
+		logger.SugaredLogger.Errorf("自选股滚动清理失败: %v", err)
+	} else if n > 0 {
+		logger.SugaredLogger.Infof("自选股滚动清理：移除 %d 只超出窗口的脚本来源自选股", n)
+	}
+}
+
+// followSkillPicksFromTool 主路径（模型调用了推荐工具）下的技能自动加入自选：
+// 从本轮工具写入跟踪器（tools.RecommendPicksThisTurn）取选股，去重后取前
+// autoFollowTopN 只交给 autoFollowSkillPicks（含窗口滚动清理）。
+//
+// 存在的理由：兜底路径能直接拿到解析出的 picks，而主路径的 picks 在
+// tools.DataToolWrapper.InvokableRun 里被 MarkRecommendPicks 记了下来，
+// 这里取回，保证两条路径的「自动加入自选」行为一致。
+func followSkillPicksFromTool(ctx context.Context, meta tools.AgentMeta, hasMeta bool) {
+	if !hasMeta || strings.TrimSpace(meta.SkillId) == "" {
+		return
+	}
+	picks := tools.RecommendPicksThisTurn(ctx)
+	if len(picks) == 0 {
+		return
+	}
+
+	seen := make(map[string]bool, len(picks))
+	ordered := make([]*promptBacktestPickJSON, 0, autoFollowTopN)
+	for _, p := range picks {
+		code := normalizePickCode(p.Code)
+		if code == "" || seen[code] {
+			continue
+		}
+		seen[code] = true
+		ordered = append(ordered, &promptBacktestPickJSON{Code: code, Name: p.Name})
+		if len(ordered) >= autoFollowTopN {
+			break
+		}
+	}
+	if len(ordered) == 0 {
+		return
+	}
+	autoFollowSkillPicks(ordered, meta.SkillId, time.Now())
 }

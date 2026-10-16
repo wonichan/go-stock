@@ -41,6 +41,14 @@ type Settings struct {
 	FeishuPushEnable bool   `json:"feishuPushEnable"`
 	FeishuRobot      string `json:"feishuRobot"`
 	FeishuSecret     string `json:"feishuSecret" gorm:"column:feishu_secret"`
+	// AstrBot 统一推送出口（推送到 QQ）。配置来自本机 AstrBot 的官方 Open API：
+	// POST {AstrBotBaseUrl}/api/v1/im/messages，Authorization: Bearer <AstrBotApiKey>，
+	// 体 {"umo":..., "message":...}。AstrBotUmo 形如「爱酱:FriendMessage:<openid>」。
+	// go-stock 在容器内时 AstrBotBaseUrl 用 http://host.docker.internal:6185。
+	AstrBotPushEnable bool   `json:"astrBotPushEnable" gorm:"column:astr_bot_push_enable"`
+	AstrBotBaseUrl    string `json:"astrBotBaseUrl" gorm:"column:astr_bot_base_url"`
+	AstrBotApiKey     string `json:"astrBotApiKey" gorm:"column:astr_bot_api_key"`
+	AstrBotUmo        string `json:"astrBotUmo" gorm:"column:astr_bot_umo"`
 	// 飞书应用机器人（接收消息+AI回复，长连接模式，与 FeishuPush 自定义机器人推送独立）
 	FeishuBotEnable        bool   `json:"feishuBotEnable"`
 	FeishuAppID            string `json:"feishuAppId" gorm:"column:feishu_app_id"`

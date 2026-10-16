@@ -185,6 +185,7 @@ type FollowedStock struct {
 	IsDel              soft_delete.DeletedAt `gorm:"softDelete:flag"`
 	Groups             []GroupStock          `gorm:"foreignKey:StockCode;references:StockCode"`
 	AiConfigId         int
+	SkillId            string
 	EntryPrice         float64
 	TakeProfitPrice    float64
 	StopLossPrice      float64

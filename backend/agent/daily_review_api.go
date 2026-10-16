@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	runtime "go-stock/backend/uiruntime"
 
@@ -57,15 +56,25 @@ func (a *DailyReviewApi) GenerateDailyReview(ctx context.Context, date string, a
 		return nil, fmt.Errorf("%s 的复盘报告正在生成中，请稍候", date)
 	}
 
-	// cron 触发时无市场统计数据（节假日/非交易日）直接跳过，不生成空报告
-	if triggerType == "cron" && len(data.NewMarketStatisticApi().GetByDate(date)) == 0 {
-		logger.SugaredLogger.Infof("%s 无市场统计数据（可能为非交易日），跳过复盘生成", date)
-		return nil, nil
+	// cron 触发时先判交易日：法定节假日不生成空报告（周末已由 cron 表达式排除）
+	if triggerType == "cron" {
+		if d, err := time.ParseInLocation("2006-01-02", date, time.Local); err == nil {
+			if trading, reason, _, err := data.IsTradingDayInfo(d); err == nil && !trading {
+				logger.SugaredLogger.Infof("%s %s，跳过复盘生成", date, reason)
+				return nil, nil
+			}
+		}
 	}
 
-	// 当日数据先刷新一次，确保拿到最新快照
+	// 当日数据先刷新一次，确保拿到最新快照（首次 cron 触发时库中可能尚无当日数据）
 	if date == time.Now().Format("2006-01-02") {
 		_ = data.NewMarketStatisticApi().FetchAndSave()
+	}
+
+	// 刷新后仍无当日市场统计，说明数据源当日无产出，跳过，不生成空报告
+	if triggerType == "cron" && len(data.NewMarketStatisticApi().GetByDate(date)) == 0 {
+		logger.SugaredLogger.Infof("%s 刷新后仍无市场统计数据，跳过复盘生成", date)
+		return nil, nil
 	}
 
 	// Upsert：一天一条，重新生成覆盖
@@ -163,7 +172,7 @@ func (a *DailyReviewApi) buildDailyReviewMaterial(date string) string {
 		sb.WriteString("（无数据）\n")
 	} else {
 		last := stats[len(stats)-1]
-		fmt.Fprintf(sb, "- 收盘快照（%s %s）：上涨 %d 家 / 下跌 %d 家，涨停 %d 家 / 跌停 %d 家，市场情绪：%s（沪：%d涨/%d跌，深：%d涨/%d跌）\n",
+		fmt.Fprintf(sb, "- 市场统计快照（数据时间 %s %s，为该行抓取时刻，非收盘时刻）：上涨 %d 家 / 下跌 %d 家，涨停 %d 家 / 跌停 %d 家，市场情绪：%s（沪：%d涨/%d跌，深：%d涨/%d跌）\n",
 			last.DataDate, last.DataTime, last.UpCount, last.DownCount, last.LimitUp, last.LimitDown,
 			last.SentimentDesc, last.ShUpCount, last.ShDownCount, last.SzUpCount, last.SzDownCount)
 		if len(stats) > 1 {
@@ -443,20 +452,27 @@ func FirstAiConfigId(aiConfigId int) int {
 	return 0
 }
 
-// pushReportExternal 外部推送（飞书/钉钉，飞书卡片有长度限制截断到 3000 字）
+// pushReportExternal 报告推送：统一走 AstrBot 出口（推送到 QQ）。
+//
+// 出口决策（用户拍定）：推送完全替换为 AstrBot，不再走飞书/钉钉。参数
+// pushFeishu/pushDingDing 是历史 cron 任务字段，保留以兼容既有任务配置，
+// 但不再影响推送行为——是否推送由设置里的 AstrBotPushEnable 单独控制。
+//
+// 不做长度截断：飞书卡片 3000 字的限制对 AstrBot 不适用；AstrBot 自身对超过
+// forward_threshold(1500 字) 的消息走合并转发。
 func pushReportExternal(title, content string, pushFeishu, pushDingDing bool) {
-	if pushFeishu {
-		msg := content
-		if utf8.RuneCountInString(msg) > 3000 {
-			msg = string([]rune(msg)[:3000]) + "\n\n...(内容过长已截断，完整报告请查看软件)"
-		}
-		go data.NewFeishuAPI().SendToFeishu(title, msg)
+	if pushFeishu || pushDingDing {
+		logger.SugaredLogger.Infof("推送出口已统一为 AstrBot，忽略历史参数 pushFeishu=%v pushDingDing=%v（%s）",
+			pushFeishu, pushDingDing, title)
 	}
-	if pushDingDing {
-		msg := content
-		if utf8.RuneCountInString(msg) > 3000 {
-			msg = string([]rune(msg)[:3000])
-		}
-		go data.NewDingDingAPI().SendToDingDing(title, msg)
+	cfg := data.GetSettingConfig()
+	if cfg == nil || !cfg.AstrBotPushEnable {
+		logger.SugaredLogger.Warnf("AstrBot 推送未开启，跳过推送：%s", title)
+		return
 	}
+	go func() {
+		if result := data.NewAstrBotAPI().SendToAstrBot(title, content); result != "发送 AstrBot 消息成功" {
+			logger.SugaredLogger.Errorf("推送失败：%s（%s）", result, title)
+		}
+	}()
 }

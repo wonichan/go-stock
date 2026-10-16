@@ -21,11 +21,17 @@ services:
       TZ: ${TZ:-Asia/Shanghai}
     volumes:
       - go-stock-data:/data
+      # 寻龙诀（/opt/xunlongjue）脚本结果的只读桥接目录：脚本写
+      # ./data/xunlongjue/morning_push.json，应用只读该目录（Q5=T1 文件桥）。
+      - ./data/xunlongjue:/data/xunlongjue:ro
     shm_size: 1g          # Chromium 抓取需要较大的 /dev/shm
     mem_limit: 3g
-    # 默认不发布端口。如需在本机/局域网直接访问，取消下面两行注释（仍需配置密码）：
-    # ports:
-    #   - "127.0.0.1:8080:8080"
+    # Q9=S1：寻龙诀运行在宿主机，需要经 HTTP 调用 go-stock 的 PickAStock「选好票」入口。
+    # 只绑回环，不对外。Dockerfile 已设 GO_STOCK_LISTEN=0.0.0.0:8080（容器内需绑全网卡
+    # 端口转发才通），而 main_server.go 对非回环监听强制要求鉴权，所以 .env 里的
+    # GO_STOCK_WEB_PASSWORD 必须有值，否则容器会直接 Fatal 退出。
+    ports:
+      - "127.0.0.1:8080:8080"
     networks: [internal]
 
   cloudflared:
