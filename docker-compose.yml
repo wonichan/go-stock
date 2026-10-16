@@ -1,0 +1,39 @@
+# go-stock Web 自托管：应用 + Cloudflare Tunnel（cloudflared 主动外连，宿主机默认不暴露任何端口）
+# 用法：cp .env.web.example .env && 编辑 .env && docker compose up -d --build
+# 详见 README-web.md
+
+services:
+  go-stock:
+    build: .
+    image: go-stock-web:local
+    restart: unless-stopped
+    environment:
+      # 鉴权（至少配置一种；经 Tunnel 暴露时强烈建议启用 Cloudflare Access）
+      CF_ACCESS_TEAM_DOMAIN: ${CF_ACCESS_TEAM_DOMAIN:-}
+      CF_ACCESS_AUD: ${CF_ACCESS_AUD:-}
+      GO_STOCK_WEB_PASSWORD: ${GO_STOCK_WEB_PASSWORD:-}
+      TZ: ${TZ:-Asia/Shanghai}
+    volumes:
+      - go-stock-data:/data
+    shm_size: 1g          # Chromium 抓取需要较大的 /dev/shm
+    mem_limit: 3g
+    # 默认不发布端口。如需在本机/局域网直接访问，取消下面两行注释（仍需配置密码）：
+    # ports:
+    #   - "127.0.0.1:8080:8080"
+    networks: [internal]
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:?请在 .env 中设置 TUNNEL_TOKEN（Cloudflare Zero Trust → Networks → Tunnels）}
+    depends_on:
+      - go-stock
+    networks: [internal]
+
+volumes:
+  go-stock-data:
+
+networks:
+  internal:
