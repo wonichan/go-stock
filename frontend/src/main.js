@@ -1,3 +1,5 @@
+// Web 模式（无 Wails 注入）时提供 window.go / window.runtime，必须最先导入
+import './web-shim'
 import {createApp} from 'vue'
 import naive from 'naive-ui'
 import App from './App.vue'
