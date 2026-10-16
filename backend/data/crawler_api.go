@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/chromedp/chromedp"
 	"go-stock/backend/logger"
+	"go-stock/backend/uiruntime"
 	"time"
 )
 
@@ -38,6 +39,7 @@ func (c *CrawlerApi) GetHtml(url, waitVisible string, headless bool) (string, bo
 	return page, true
 }
 func (c *CrawlerApi) GetHtml_old(url, waitVisible string, headless bool) (string, bool) {
+	headless = headless || uiruntime.ServerMode // Web 服务模式下强制无头
 	htmlContent := ""
 	path := GetSettingConfig().BrowserPath
 	//logger.SugaredLogger.Infof("Browser path:%s", path)
@@ -101,6 +103,7 @@ func (c *CrawlerApi) GetHtml_old(url, waitVisible string, headless bool) (string
 }
 
 func (c *CrawlerApi) GetHtmlWithNoCancel(url, waitVisible string, headless bool) (html string, ok bool, parent context.CancelFunc, child context.CancelFunc) {
+	headless = headless || uiruntime.ServerMode // Web 服务模式下强制无头
 	htmlContent := ""
 	path := GetSettingConfig().BrowserPath
 	//logger.SugaredLogger.Infof("BrowserPath :%s", path)
@@ -167,6 +170,7 @@ func (c *CrawlerApi) GetHtmlWithNoCancel(url, waitVisible string, headless bool)
 }
 
 func (c *CrawlerApi) GetHtmlWithActions(actions *[]chromedp.Action, headless bool) (string, bool) {
+	headless = headless || uiruntime.ServerMode // Web 服务模式下强制无头
 	htmlContent := ""
 	*actions = append(*actions, chromedp.InnerHTML("body", &htmlContent))
 
