@@ -70,7 +70,7 @@ GO_STOCK_WEB_PASSWORD='一个足够长的随机密码' \
 | 变量 | 默认值 | 说明 |
 |---|---|---|
 | `GO_STOCK_LISTEN` | `127.0.0.1:8080`（镜像内 `0.0.0.0:8080`） | 监听地址 |
-| `GO_STOCK_ROOT_DIR` | 可执行文件目录/用户配置目录（镜像内 `/data`） | 数据根目录（`data/`、`logs/`、`exports/` 等） |
+| `GO_STOCK_ROOT_DIR` | 可执行文件目录/用户配置目录（镜像内 `/data`） | 数据根目录（`data/`、`logs/`、`data/exports/` 等） |
 | `CF_ACCESS_TEAM_DOMAIN` | – | Cloudflare Access 团队域名，如 `myteam.cloudflareaccess.com`（也可只写 `myteam`） |
 | `CF_ACCESS_AUD` | – | Access 应用的 Application Audience (AUD) Tag |
 | `GO_STOCK_WEB_PASSWORD` | – | 后备密码登录；也可用 `Authorization: Bearer <密码>` 供脚本调用。读取后会从进程环境中移除 |
@@ -100,7 +100,7 @@ GO_STOCK_WEB_PASSWORD='一个足够长的随机密码' \
 其余页面多数可直接使用（同一套后端方法），但以下能力在 Web 版中尚未实现或被禁用：
 
 - 原生“打开文件”对话框（导入技能包、导入交易记录 Excel、知识库选择文件）：返回“Web 模式暂不支持”。
-- 原生“保存文件”对话框：改为保存到 `/data/exports/`，写完后浏览器自动下载（`/download/<文件名>`）。
+- 原生“保存文件”对话框：改为保存到 `$GO_STOCK_ROOT_DIR/data/exports/`（镜像内 `/data/data/exports/`），写完后浏览器自动下载（`/download/<文件名>`）。
 - 系统托盘、桌面通知、单实例锁、自动更新、关闭确认、窗口尺寸记忆：不适用，已禁用或为 no-op。需要通知请使用钉钉/飞书推送。
 - 自动更新：Web 构建与「定制版」一样不检查/下载新版本（升级请重新构建镜像），赞助码/VIP 判定逻辑不变。
 - 内置的独立 `ai-assistant-web`（:18888）在 server 模式下不启动，只暴露一个端口。

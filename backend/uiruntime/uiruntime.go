@@ -39,6 +39,6 @@ type EventSink func(eventName string, data []interface{})
 // IsServerMode 报告当前二进制是否为 Web 服务构建（-tags server）。
 func IsServerMode() bool { return ServerMode }
 
-// ExportsDir 是 server 构建下「保存文件对话框」的落盘目录（<数据根>/exports），
+// ExportsDir 是 server 构建下「保存文件对话框」的落盘目录（<数据根>/data/exports），
 // 文件写完后通过 /download/<name> 提供给浏览器下载。
 func ExportsDir() string { return apppath.File("exports") }
