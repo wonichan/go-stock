@@ -3922,7 +3922,7 @@ func (a *App) InitCronTasks() {
 			TaskType: "daily_review",
 			Enable:   true,
 			Status:   "active",
-			Params:   `{"aiConfigId":0,"sysPromptId":0,"thinking":false,"agentMode":"","includeLhb":true,"pushFeishu":false,"pushDingDing":false}`,
+			Params:   agent.DefaultDailyReviewTaskParams,
 			Description: "收盘后自动生成当日复盘报告（市场统计+交易记录+龙虎榜），aiConfigId=0 时使用第一个AI配置；" +
 				"18:00 生成时龙虎榜数据已发布，素材更完整",
 		}
@@ -3940,7 +3940,7 @@ func (a *App) InitCronTasks() {
 			TaskType:    "morning_strategy",
 			Enable:      true,
 			Status:      "active",
-			Params:      `{"aiConfigId":0,"sysPromptId":0,"thinking":false,"agentMode":"","pushFeishu":false,"pushDingDing":false}`,
+			Params:      agent.DefaultMorningStrategyTaskParams,
 			Description: "盘前自动生成当日策略（基于昨日复盘+隔夜外围+龙虎榜+自选股），aiConfigId=0 时使用第一个AI配置",
 		}
 		err := cronApi.Create(task)
@@ -3994,6 +3994,12 @@ func (a *App) InitCronTasks() {
 		} else if n > 0 {
 			logger.SugaredLogger.Infof("已将盘前策略定时任务 %q 迁移为 09:30（%d 条）", from, n)
 		}
+	}
+	// 迁移（只跑一次）：已有的每日复盘/盘前策略任务默认开启推送（AstrBot）；之后用户关掉不再改回。
+	if n, err := cronApi.EnableReportPushOnce(); err != nil {
+		logger.SugaredLogger.Errorf("迁移复盘/盘前推送开关失败：%v", err)
+	} else if n > 0 {
+		logger.SugaredLogger.Infof("已为 %d 个每日复盘/盘前策略任务开启推送", n)
 	}
 	tasks := cronApi.GetAll()
 	if len(tasks) == 0 {
