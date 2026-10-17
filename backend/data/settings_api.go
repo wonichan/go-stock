@@ -43,7 +43,7 @@ type Settings struct {
 	FeishuSecret     string `json:"feishuSecret" gorm:"column:feishu_secret"`
 	// AstrBot 统一推送出口（推送到 QQ）。配置来自本机 AstrBot 的官方 Open API：
 	// POST {AstrBotBaseUrl}/api/v1/im/messages，Authorization: Bearer <AstrBotApiKey>，
-	// 体 {"umo":..., "message":...}。AstrBotUmo 形如「爱酱:FriendMessage:<openid>」。
+	// 体 {"umo":..., "message":...}。AstrBotUmo 形如「<bot-name>:FriendMessage:<openid>」。
 	// go-stock 在容器内时 AstrBotBaseUrl 用 http://host.docker.internal:6185。
 	AstrBotPushEnable bool   `json:"astrBotPushEnable" gorm:"column:astr_bot_push_enable"`
 	AstrBotBaseUrl    string `json:"astrBotBaseUrl" gorm:"column:astr_bot_base_url"`

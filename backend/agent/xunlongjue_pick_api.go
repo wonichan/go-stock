@@ -17,8 +17,10 @@ package agent
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"go-stock/backend/data"
@@ -43,10 +45,19 @@ const (
 	// autoSaveRecommendRecords 跑在 goroutine 里，含一次实时行情 HTTP 请求，给它留足时间。
 	xunlongjuePickSaveWait = 45 * time.Second
 	xunlongjuePickSavePoll = 500 * time.Millisecond
+	// xunlongjuePickFollowWait 推荐记录落库后，等待同一 goroutine 里紧随其后的自动加自选完成的上限。
+	xunlongjuePickFollowWait = 10 * time.Second
 
 	// xunlongjuePickMaxReturn 返回给调用方的推荐条数上限。
 	xunlongjuePickMaxReturn = 20
 )
+
+// ErrXunlongjuePickRunning 已有一轮「选好票」在跑时返回，调用方稍后重试即可。
+var ErrXunlongjuePickRunning = errors.New("选好票已在运行中，请等待上一轮完成后再试")
+
+// xunlongjuePickMu 串行化 PickAStock：一轮约 4 分钟且结果按 (skill_id, id > beforeID)
+// 认领，并发跑会互相认领对方落库的记录，因此同一时刻只允许一轮。
+var xunlongjuePickMu sync.Mutex
 
 // XunlongjuePickApi 「选好票」入口。
 type XunlongjuePickApi struct{}
@@ -73,7 +84,7 @@ type XunlongjuePickResult struct {
 	Report      string               `json:"report"` // AI 最终正文（Markdown）
 	Picks       []XunlongjuePickItem `json:"picks"`  // 已写入推荐记录并加入自选的个股
 	RecordCount int                  `json:"recordCount"`
-	Followed    bool                 `json:"followed"` // 是否走了自动加自选链路
+	Followed    bool                 `json:"followed"` // 本轮是否至少有一只个股实际加入（或刷新）了自选
 }
 
 // ResolveXunlongjuePickPromptID 按名字解析【七维选股策略】模板 ID。
@@ -101,6 +112,11 @@ func ResolveXunlongjuePickPromptID() int {
 // aiConfigId 为 0 时用第一个 AI 配置；sysPromptId 为 0 时按名字解析【七维选股策略】。
 // agentMode 为空串时由 ChatWithContext 按提问复杂度自动选择。
 func (a *XunlongjuePickApi) PickAStock(ctx context.Context, aiConfigId, sysPromptId int, agentMode string) (*XunlongjuePickResult, error) {
+	if !xunlongjuePickMu.TryLock() {
+		return nil, ErrXunlongjuePickRunning
+	}
+	defer xunlongjuePickMu.Unlock()
+
 	if sysPromptId <= 0 {
 		sysPromptId = ResolveXunlongjuePickPromptID()
 	}
@@ -157,7 +173,6 @@ func (a *XunlongjuePickApi) PickAStock(ctx context.Context, aiConfigId, sysPromp
 		Report:      report,
 		Picks:       make([]XunlongjuePickItem, 0, len(rows)),
 		RecordCount: len(rows),
-		Followed:    strings.TrimSpace(XunlongjueSkillIdPickAStock) != "",
 	}
 	for _, row := range rows {
 		code := normalizePickCode(row.StockCode)
@@ -171,7 +186,8 @@ func (a *XunlongjuePickApi) PickAStock(ctx context.Context, aiConfigId, sysPromp
 			Reason: row.RecommendReason,
 		})
 	}
-	logger.SugaredLogger.Infof("选好票完成：落推荐记录 %d 条，耗时 %dms", len(rows), durationMs)
+	result.Followed = waitSkillPicksFollowed(XunlongjueSkillIdPickAStock, result.Picks, start, xunlongjuePickFollowWait, xunlongjuePickSavePoll)
+	logger.SugaredLogger.Infof("选好票完成：落推荐记录 %d 条，加入自选=%v，耗时 %dms", len(rows), result.Followed, durationMs)
 	return result, nil
 }
 
@@ -192,6 +208,38 @@ func waitNewSkillRecommendations(skillId string, beforeID int, timeout, interval
 		}
 		if time.Now().After(deadline) {
 			return nil
+		}
+		time.Sleep(interval)
+	}
+}
+
+// waitSkillPicksFollowed 判断本轮选股是否实际加入（或刷新）了自选：自动加自选在
+// autoSaveRecommendRecords 的 goroutine 里、推荐记录落库之后执行，因此短暂轮询。
+// 判定口径：followed_stock 里存在该来源（skill_id）且加入时间不早于本轮开始的记录，
+// 且代码命中本轮 picks。手动自选（skill_id 为空）、63 只上限被跳过的都不算。
+func waitSkillPicksFollowed(skillId string, picks []XunlongjuePickItem, since time.Time, timeout, interval time.Duration) bool {
+	if len(picks) == 0 {
+		return false
+	}
+	codes := make(map[string]bool, len(picks))
+	for _, p := range picks {
+		if c := normalizePickCode(p.Code); c != "" {
+			codes[c] = true
+		}
+	}
+	deadline := time.Now().Add(timeout)
+	for {
+		var rows []data.FollowedStock
+		if err := db.Dao.Model(&data.FollowedStock{}).Where("skill_id = ?", skillId).Find(&rows).Error; err != nil {
+			logger.SugaredLogger.Errorf("查询选好票自选记录失败: %v", err)
+		}
+		for _, r := range rows {
+			if codes[normalizePickCode(r.StockCode)] && !r.Time.Before(since) {
+				return true
+			}
+		}
+		if time.Now().After(deadline) {
+			return false
 		}
 		time.Sleep(interval)
 	}

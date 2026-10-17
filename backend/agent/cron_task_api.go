@@ -114,6 +114,15 @@ func (a *CronTaskApi) ExistsByTaskType(taskType string) bool {
 	return count > 0
 }
 
+// MigrateCronExpr 把指定类型中表达式仍为 from 的任务改成 to（用于默认表达式变更的迁移），
+// 返回受影响行数。表达式已被用户改成其它值的任务不受影响。
+func (a *CronTaskApi) MigrateCronExpr(taskType, from, to string) (int64, error) {
+	res := db.Dao.Model(&models.CronTask{}).
+		Where("task_type = ? AND cron_expr = ?", taskType, from).
+		Update("cron_expr", to)
+	return res.RowsAffected, res.Error
+}
+
 // ExistsByName 任务名是否已存在（同名多任务类型，如推荐回测按持有期建多个任务）。
 func (a *CronTaskApi) ExistsByName(name string) bool {
 	var count int64
@@ -415,9 +424,11 @@ func (a *CronTaskApi) executeDailyReview(ctx context.Context, task *models.CronT
 	if review == nil {
 		return nil // 非交易日跳过
 	}
-	// 推送出口统一为 AstrBot（见 pushReportExternal），是否推送由设置里的
-	// AstrBotPushEnable 决定，不再由任务参数 gate。
-	pushReportExternal("每日复盘 "+review.ReviewDate, review.Content, params.PushFeishu, params.PushDingDing)
+	// 推送出口统一为 AstrBot（见 pushReportExternal）：任务参数里的推送开关决定本任务是否推送，
+	// 设置里的 AstrBotPushEnable 决定 AstrBot 出口是否可用，两者都满足才推送。
+	if params.PushFeishu || params.PushDingDing {
+		pushReportExternal("每日复盘 "+review.ReviewDate, review.Content, params.PushFeishu, params.PushDingDing)
+	}
 	return nil
 }
 
@@ -437,9 +448,11 @@ func (a *CronTaskApi) executeMorningStrategy(ctx context.Context, task *models.C
 	if strategy == nil {
 		return nil // 长假期间跳过
 	}
-	// 推送出口统一为 AstrBot（见 pushReportExternal），是否推送由设置里的
-	// AstrBotPushEnable 决定，不再由任务参数 gate。
-	pushReportExternal("盘前策略 "+strategy.StrategyDate, strategy.Content, params.PushFeishu, params.PushDingDing)
+	// 推送出口统一为 AstrBot（见 pushReportExternal）：任务参数里的推送开关决定本任务是否推送，
+	// 设置里的 AstrBotPushEnable 决定 AstrBot 出口是否可用，两者都满足才推送。
+	if params.PushFeishu || params.PushDingDing {
+		pushReportExternal("盘前策略 "+strategy.StrategyDate, strategy.Content, params.PushFeishu, params.PushDingDing)
+	}
 	return nil
 }
 

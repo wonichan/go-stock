@@ -1076,7 +1076,7 @@ function deletePrompt(ID) {
             </n-form-item-gi>
             <n-form-item-gi :span="22" v-if="formValue.astrBotPush.enable" label="推送目标会话标识 umo："
                             path="astrBotPush.umo">
-              <n-input placeholder="形如 爱酱:FriendMessage:<openid>；QQ 单聊的 session_id 是 openid，不是 QQ 号"
+              <n-input placeholder="形如 <bot-name>:FriendMessage:<openid>；QQ 单聊的 session_id 是 openid，不是 QQ 号"
                        v-model:value="formValue.astrBotPush.umo"/>
               <n-button type="primary" @click="sendAstrBotTestNotice">发送测试通知</n-button>
             </n-form-item-gi>
