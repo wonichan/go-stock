@@ -8,7 +8,7 @@ package data
 //	Header: Authorization: Bearer <apiKey>     （服务端同时接受 X-API-Key，统一用 Bearer）
 //	Body:   {"umo":"<platform_id>:<MessageType>:<session_id>","message":"<markdown>"}
 //
-// umo 形如「爱酱:FriendMessage:3C80967C94173B596EA1985D41040D25」——QQ 官方机器人
+// umo 形如「<bot-name>:FriendMessage:<openid>」——QQ 官方机器人
 // 单聊的 session_id 是 openid，不是 QQ 号。成功响应为 HTTP 200 + {"status":"ok",...}。
 // 该调用链已由本机 bilibili-notify 项目在生产环境验证可用。
 //
@@ -100,7 +100,8 @@ func (a AstrBotAPI) SendToAstrBotByConfig(baseUrl, apiKey, umo, title, message s
 	result := resp.String()
 	logger.SugaredLogger.Infof("send astrbot message: status=%d body=%s", resp.StatusCode(), result)
 	if resp.StatusCode() != http.StatusOK {
-		return fmt.Sprintf("发送 AstrBot 消息失败：HTTP %d %s", resp.StatusCode(), result)
+		// 不回显响应体：服务地址可由设置页任意填写，回显会把内网服务的响应透给调用方。
+		return fmt.Sprintf("发送 AstrBot 消息失败：HTTP %d", resp.StatusCode())
 	}
 	if status := gjson.Get(result, "status"); status.Exists() && status.String() != "ok" {
 		return "发送 AstrBot 消息失败：" + result

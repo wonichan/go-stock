@@ -455,16 +455,13 @@ func FirstAiConfigId(aiConfigId int) int {
 // pushReportExternal 报告推送：统一走 AstrBot 出口（推送到 QQ）。
 //
 // 出口决策（用户拍定）：推送完全替换为 AstrBot，不再走飞书/钉钉。参数
-// pushFeishu/pushDingDing 是历史 cron 任务字段，保留以兼容既有任务配置，
-// 但不再影响推送行为——是否推送由设置里的 AstrBotPushEnable 单独控制。
+// pushFeishu/pushDingDing 是历史 cron 任务字段，保留以兼容既有任务配置：
+// 调用方（cron_task_api.go）以「任一为 true」作为本任务的推送开关，渠道一律是
+// AstrBot；AstrBot 出口是否可用由设置里的 AstrBotPushEnable 控制。
 //
 // 不做长度截断：飞书卡片 3000 字的限制对 AstrBot 不适用；AstrBot 自身对超过
 // forward_threshold(1500 字) 的消息走合并转发。
 func pushReportExternal(title, content string, pushFeishu, pushDingDing bool) {
-	if pushFeishu || pushDingDing {
-		logger.SugaredLogger.Infof("推送出口已统一为 AstrBot，忽略历史参数 pushFeishu=%v pushDingDing=%v（%s）",
-			pushFeishu, pushDingDing, title)
-	}
 	cfg := data.GetSettingConfig()
 	if cfg == nil || !cfg.AstrBotPushEnable {
 		logger.SugaredLogger.Warnf("AstrBot 推送未开启，跳过推送：%s", title)
