@@ -123,6 +123,72 @@ func (a *CronTaskApi) MigrateCronExpr(taskType, from, to string) (int64, error) 
 	return res.RowsAffected, res.Error
 }
 
+// 每日复盘 / 盘前策略默认任务参数：pushFeishu=true 作为该任务的推送开关
+// （渠道统一为 AstrBot，见 pushReportExternal；字段名沿用历史命名）。
+const (
+	DefaultDailyReviewTaskParams     = `{"aiConfigId":0,"sysPromptId":0,"thinking":false,"agentMode":"","includeLhb":true,"pushFeishu":true,"pushDingDing":false}`
+	DefaultMorningStrategyTaskParams = `{"aiConfigId":0,"sysPromptId":0,"thinking":false,"agentMode":"","pushFeishu":true,"pushDingDing":false}`
+)
+
+// cronMigrationMarker 一次性迁移的标记表：每条迁移跑完写一行，存在即跳过。
+type cronMigrationMarker struct {
+	Name      string `gorm:"primaryKey"`
+	CreatedAt time.Time
+}
+
+func (cronMigrationMarker) TableName() string { return "cron_migration_markers" }
+
+const reportPushMigrationName = "report_push_default_on_v1"
+
+// EnableReportPushOnce 为已有的 daily_review / morning_strategy 任务开启推送（pushFeishu=true），
+// 只执行一次（cron_migration_markers 记标记），之后用户手动关闭推送不会被改回。
+// 返回本次改动的任务数。
+func (a *CronTaskApi) EnableReportPushOnce() (int64, error) {
+	if err := db.Dao.AutoMigrate(&cronMigrationMarker{}); err != nil {
+		return 0, err
+	}
+	var changed int64
+	err := db.Dao.Transaction(func(tx *gorm.DB) error {
+		var n int64
+		if err := tx.Model(&cronMigrationMarker{}).Where("name = ?", reportPushMigrationName).Count(&n).Error; err != nil {
+			return err
+		}
+		if n > 0 {
+			return nil
+		}
+		var tasks []models.CronTask
+		if err := tx.Where("task_type IN ?", []string{"daily_review", "morning_strategy"}).Find(&tasks).Error; err != nil {
+			return err
+		}
+		for _, t := range tasks {
+			params := map[string]any{}
+			if strings.TrimSpace(t.Params) != "" {
+				if err := json.Unmarshal([]byte(t.Params), &params); err != nil {
+					logger.SugaredLogger.Warnf("任务 %d 参数无法解析，跳过推送迁移：%v", t.ID, err)
+					continue
+				}
+			}
+			if v, _ := params["pushFeishu"].(bool); v {
+				continue
+			}
+			if v, _ := params["pushDingDing"].(bool); v {
+				continue
+			}
+			params["pushFeishu"] = true
+			b, err := json.Marshal(params)
+			if err != nil {
+				return err
+			}
+			if err := tx.Model(&models.CronTask{}).Where("id = ?", t.ID).Update("params", string(b)).Error; err != nil {
+				return err
+			}
+			changed++
+		}
+		return tx.Create(&cronMigrationMarker{Name: reportPushMigrationName}).Error
+	})
+	return changed, err
+}
+
 // ExistsByName 任务名是否已存在（同名多任务类型，如推荐回测按持有期建多个任务）。
 func (a *CronTaskApi) ExistsByName(name string) bool {
 	var count int64
