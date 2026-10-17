@@ -68,11 +68,12 @@ func PruneScriptFollowedStocks(now time.Time, keepTradingDays int) (int64, error
 //
 // 与 Follow() 的区别：
 //   - 不调用 GetStockCodeRealTimeData，因此在盘后 / 停牌 / 非交易时段也不会因取不到行情而失败；
-//   - 不套用 Follow() 的 63 只上限与 VIP 判断（盘前/选好票要由调用方按 TOP N 控制数量）；
+//   - 新建时与 Follow() 一样受 63 只上限约束（非 VIP），超限跳过并记日志；
 //   - 记录来源标记（skill_id），供「只清理脚本来源」的滚动窗口使用。
 //
 // 已存在时：
-//   - 若已存在记录是脚本来源（skill_id 非空），刷新 skill_id 与加入时间（重新入选 → 窗口重新计时）；
+//   - 若已存在记录是脚本来源（skill_id 非空），刷新 skill_id 与加入时间（重新入选 → 窗口重新计时，
+//     同一来源重复入选也刷新）；
 //   - 若是手动加入（skill_id 为空），保持原样，不覆盖用户自己的记录。
 //
 // 返回 didCreate 表示是否新建，didRefresh 表示是否刷新了窗口计时。
@@ -91,15 +92,20 @@ func FollowStockWithSource(stockCode, stockName, skillId string, now time.Time) 
 			// 手动加入的自选股：不动。
 			return false, false, nil
 		}
-		if existing.SkillId == skillId {
-			return false, false, nil
-		}
 		if e := db.Dao.Model(&FollowedStock{}).
 			Where("stock_code = ?", code).
 			Updates(map[string]any{"skill_id": skillId, "time": now}).Error; e != nil {
 			return false, false, e
 		}
 		return false, true, nil
+	}
+
+	count := int64(0)
+	db.Dao.Model(&FollowedStock{}).Where("is_del = ?", 0).Count(&count)
+	// 与 Follow() 相同：VIP 用户（有效期内）不限制关注数量，非 VIP 用户最多关注 63 只
+	if _, active := EffectiveSponsorVipLevel(); !active && count >= 63 {
+		logger.SugaredLogger.Warnf("自选股已达 63 只上限（非 VIP），跳过自动加入 %s（来源 %s）", code, skillId)
+		return false, false, nil
 	}
 
 	maxSort := int64(0)
