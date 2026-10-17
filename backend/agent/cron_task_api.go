@@ -114,6 +114,15 @@ func (a *CronTaskApi) ExistsByTaskType(taskType string) bool {
 	return count > 0
 }
 
+// MigrateCronExpr 把指定类型中表达式仍为 from 的任务改成 to（用于默认表达式变更的迁移），
+// 返回受影响行数。表达式已被用户改成其它值的任务不受影响。
+func (a *CronTaskApi) MigrateCronExpr(taskType, from, to string) (int64, error) {
+	res := db.Dao.Model(&models.CronTask{}).
+		Where("task_type = ? AND cron_expr = ?", taskType, from).
+		Update("cron_expr", to)
+	return res.RowsAffected, res.Error
+}
+
 // ExistsByName 任务名是否已存在（同名多任务类型，如推荐回测按持有期建多个任务）。
 func (a *CronTaskApi) ExistsByName(name string) bool {
 	var count int64

@@ -3936,7 +3936,7 @@ func (a *App) InitCronTasks() {
 	if !cronApi.ExistsByTaskType("morning_strategy") {
 		task := &models.CronTask{
 			Name:        "盘前策略",
-			CronExpr:    "30 9 * * 1-5", // 交易日 09:30：寻龙诀 09:26 采集竞价一进二结果后再生成策略
+			CronExpr:    "0 30 9 * * 1-5", // 交易日 09:30（6 段：秒 分 时 日 月 周）：寻龙诀 09:26 采集竞价一进二结果后再生成策略
 			TaskType:    "morning_strategy",
 			Enable:      true,
 			Status:      "active",
@@ -3983,6 +3983,16 @@ func (a *App) InitCronTasks() {
 			} else {
 				logger.SugaredLogger.Infof("已自动创建推荐回测定时任务：%s", name)
 			}
+		}
+	}
+	// 迁移：盘前策略从 09:00 挪到 09:30（等寻龙诀 09:26 竞价结果）。已存在的旧默认任务
+	// 不会走上面的创建分支，这里只改仍是旧默认值的那条，用户自定义过的表达式不动。
+	// 同时修正曾被写入的 5 段表达式 "30 9 * * 1-5"（cron 带秒解析，5 段会注册失败）。
+	for _, from := range []string{"0 0 9 * * 1-5", "30 9 * * 1-5"} {
+		if n, err := cronApi.MigrateCronExpr("morning_strategy", from, "0 30 9 * * 1-5"); err != nil {
+			logger.SugaredLogger.Errorf("迁移盘前策略定时表达式失败：%v", err)
+		} else if n > 0 {
+			logger.SugaredLogger.Infof("已将盘前策略定时任务 %q 迁移为 09:30（%d 条）", from, n)
 		}
 	}
 	tasks := cronApi.GetAll()
