@@ -2638,7 +2638,11 @@ func GetAllDataTools() []tool.BaseTool {
 					continue
 				}
 				stockData, err := data.NewStockDataApi().GetStockCodeRealTimeData(code)
-				if err != nil || stockData == nil || len(*stockData) == 0 {
+				if err != nil {
+					results = append(results, code+"：查询失败："+err.Error())
+					continue
+				}
+				if stockData == nil || len(*stockData) == 0 {
 					results = append(results, code+"：未找到股票信息")
 					continue
 				}
