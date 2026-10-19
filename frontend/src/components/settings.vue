@@ -453,6 +453,16 @@ function saveConfig() {
   }
 
   return UpdateConfig(config).then(res => {
+    // 立即同步页面底色，避免保存后仍白底直到刷新
+    const root = document.documentElement
+    if (config.darkTheme) {
+      root.classList.add('go-stock-dark')
+      root.setAttribute('theme-mode', 'dark')
+    } else {
+      root.classList.remove('go-stock-dark')
+      root.setAttribute('theme-mode', 'light')
+    }
+
     if (res === '保存成功！') {
       message.success(res)
     } else {

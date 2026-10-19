@@ -8,9 +8,7 @@ import {MdEditor, MdPreview} from 'md-editor-v3';
 
 onBeforeMount(()=> {
   GetConfig().then(result => {
-    if (result.darkTheme) {
-      editorDataRef.darkTheme = true
-    }
+    editorDataRef.darkTheme = !!result.darkTheme
   })
 })
 onMounted(() => {
@@ -36,7 +34,7 @@ const mdEditorRef = ref(null)
 const editorDataRef = reactive({
   show: false,
   loading: false,
-  darkTheme: false,
+  darkTheme: true,
   chatId: "",
   modelName: "",
   CreatedAt: "",

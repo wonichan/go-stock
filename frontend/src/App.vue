@@ -54,6 +54,20 @@ const enableContracts = ref(true)
 const isCustomBuild = ref(false)
 const enableAgent = ref(false)
 const enableDarkTheme = ref(darkTheme)
+function applyThemeChrome(isDark) {
+  const root = document.documentElement
+  if (isDark) {
+    root.classList.add('go-stock-dark')
+    root.setAttribute('theme-mode', 'dark')
+  } else {
+    root.classList.remove('go-stock-dark')
+    root.setAttribute('theme-mode', 'light')
+  }
+}
+applyThemeChrome(true)
+watch(enableDarkTheme, (v) => {
+  applyThemeChrome(!!v)
+})
 const content = ref('未经授权,禁止商业目的!\n\n数据来源于网络,仅供参考;投资有风险,入市需谨慎')
 const isFullscreen = ref(false)
 const activeKey = ref('stock')
@@ -1460,6 +1474,7 @@ onBeforeUnmount(() => {
   EventsOff("newsPush")
   EventsOff("dailyReviewGenerated")
   EventsOff("morningStrategyGenerated")
+  EventsOff("updateSettings")
   EventsOff("groupListChanged")
   EventsOff("updateDownloadStart")
   EventsOff("downloadProgress")
@@ -1502,6 +1517,12 @@ onBeforeMount(() => {
 
   refreshStockGroupMenu()
   // 监听分组变化（新增/改名/删除），实时刷新菜单栏
+  EventsOn("updateSettings", (cfg) => {
+    if (cfg && typeof cfg.darkTheme === 'boolean') {
+      enableDarkTheme.value = cfg.darkTheme ? darkTheme : null
+      applyThemeChrome(cfg.darkTheme)
+    }
+  })
   EventsOn("groupListChanged", () => {
     refreshStockGroupMenu()
   })
@@ -1529,6 +1550,7 @@ onBeforeMount(() => {
     } else {
       enableDarkTheme.value = null
     }
+    applyThemeChrome(!!res.darkTheme)
   }).catch(err => {
     console.error("GetConfig error:", err)
   })

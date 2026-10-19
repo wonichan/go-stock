@@ -868,7 +868,9 @@ func GB18030ToUTF8(bs []byte) string {
 	reader := transform.NewReader(bytes.NewReader(bs), simplifiedchinese.GB18030.NewDecoder())
 	d, err := io.ReadAll(reader)
 	if err != nil {
-		panic(err)
+		// 解码失败时退回原始字节，避免把整轮行情解析打崩（agent 工具会接到 panic）
+		logger.SugaredLogger.Warnf("GB18030ToUTF8 decode error: %v", err)
+		return string(bs)
 	}
 	return string(d)
 }
@@ -887,6 +889,12 @@ func ParseTxStockData(data string) (*StockInfo, error) {
 	var err error
 	if strutil.ContainsAny(datas[0], []string{"v_r_hk", "v_hk", "v_sz", "v_sh"}) {
 		result, err = ParseTxHKStockData(datas)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if result == nil {
+		return nil, fmt.Errorf("unsupported or empty quote payload: %s", datas[0])
 	}
 
 	//logger.SugaredLogger.Infof("股票数据解析完成: %v", result)
@@ -901,6 +909,10 @@ func ParseTxStockData(data string) (*StockInfo, error) {
 	if err != nil {
 		logger.SugaredLogger.Errorf("json.Unmarshal error:%s", err.Error())
 		return nil, err
+	}
+	// json.Unmarshal("null", &ptr) 会把 ptr 置为 nil；空行情/解析失败时不能再解引用
+	if stockInfo == nil {
+		return nil, fmt.Errorf("empty quote payload")
 	}
 	//logger.SugaredLogger.Infof("股票数据解析完成stockInfo: %+v", stockInfo)
 
@@ -1005,11 +1017,16 @@ func ParseTxHKStockData(datas []string) (map[string]string, error) {
 			"/":  "-",
 			"\n": " ",
 		})
-		result["日期"] = strutil.SplitAndTrim(timestr, " ", "")[0]
-		result["时间"] = strutil.SplitAndTrim(timestr, " ", "")[1]
+		if ts := strutil.SplitAndTrim(timestr, " ", ""); len(ts) >= 2 {
+			result["日期"] = ts[0]
+			result["时间"] = ts[1]
+		}
 	} else {
-		result["日期"] = strutil.Trim(parts[29])[0:4] + "-" + strutil.Trim(parts[29])[4:6] + "-" + strutil.Trim(parts[29])[6:8]
-		result["时间"] = strutil.Trim(parts[29])[8:10] + ":" + strutil.Trim(parts[29])[10:12] + ":" + strutil.Trim(parts[29])[12:14]
+		day := strutil.Trim(parts[29])
+		if len(day) >= 14 {
+			result["日期"] = day[0:4] + "-" + day[4:6] + "-" + day[6:8]
+			result["时间"] = day[8:10] + ":" + day[10:12] + ":" + day[12:14]
+		}
 		result["今日最高价"] = parts[32]
 		result["今日最低价"] = parts[33]
 	}
@@ -1029,14 +1046,21 @@ func ParseFullSingleStockData(data string) (*StockInfo, error) {
 	}
 	var result map[string]string
 	var err error
-	if strutil.ContainsAny(datas[0], []string{"hq_str_sz", "hq_str_sh", "hq_str_bj", "hq_str_sb"}) {
+	switch {
+	case strutil.ContainsAny(datas[0], []string{"hq_str_sz", "hq_str_sh", "hq_str_bj", "hq_str_sb"}):
 		result, err = ParseSHSZStockData(datas)
-	}
-	if strutil.ContainsAny(datas[0], []string{"hq_str_hk"}) {
+	case strutil.ContainsAny(datas[0], []string{"hq_str_hk"}):
 		result, err = ParseHKStockData(datas)
-	}
-	if strutil.ContainsAny(datas[0], []string{"hq_str_gb"}) {
+	case strutil.ContainsAny(datas[0], []string{"hq_str_gb"}):
 		result, err = ParseUSStockData(datas)
+	default:
+		return nil, fmt.Errorf("unsupported or empty quote payload: %s", datas[0])
+	}
+	if err != nil {
+		return nil, err
+	}
+	if result == nil {
+		return nil, fmt.Errorf("empty quote payload: %s", datas[0])
 	}
 
 	//logger.SugaredLogger.Infof("股票数据解析完成: %v", result)
@@ -1051,6 +1075,9 @@ func ParseFullSingleStockData(data string) (*StockInfo, error) {
 	if err != nil {
 		logger.SugaredLogger.Errorf("json.Unmarshal error:%s", err.Error())
 		return nil, err
+	}
+	if stockInfo == nil {
+		return nil, fmt.Errorf("empty quote payload")
 	}
 	//logger.SugaredLogger.Infof("股票数据解析完成stockInfo: %+v", stockInfo)
 
@@ -1119,8 +1146,12 @@ func ParseUSStockData(datas []string) (map[string]string, error) {
 	result["当前价格"] = parts[1]
 	result["盘前盘后"] = parts[21]
 	result["盘前盘后涨跌幅"] = parts[22]
-	result["日期"] = strutil.SplitAndTrim(parts[3], " ", "")[0]
-	result["时间"] = strutil.SplitAndTrim(parts[3], " ", "")[1]
+	if ts := strutil.SplitAndTrim(parts[3], " ", ""); len(ts) >= 2 {
+		result["日期"] = ts[0]
+		result["时间"] = ts[1]
+	} else if len(ts) == 1 {
+		result["日期"] = ts[0]
+	}
 	//logger.SugaredLogger.Infof("美股股票数据解析完成: %v", result)
 	return result, nil
 }

@@ -464,7 +464,7 @@ const data = reactive({
   loading: true,
   analysisStatus: "",
   enableDanmu: false,
-  darkTheme: false,
+  darkTheme: true,
   changePercent: 0
 })
 const feishiInterval = ref(null)
@@ -900,9 +900,8 @@ onBeforeMount(() => {
     if (result.enableDanmu) {
       data.enableDanmu = true
     }
-    if (result.darkTheme) {
-      data.darkTheme = true
-    }
+    data.darkTheme = !!result.darkTheme
+
   }).catch(err => { console.error("GetConfig error:", err) })
   GetPromptTemplates("", "").then(res => {
     promptTemplates.value = res

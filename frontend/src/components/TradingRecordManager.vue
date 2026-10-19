@@ -60,7 +60,7 @@ watch(showKlineModal, (v) => {
 const longStopLossPrice = ref(0)
 const longTakeProfitPrice = ref(0)
 const costPrice = ref(0)
-const darkTheme = ref(false)
+const darkTheme = ref(true)
 
 const dataRef = ref([])
 const loadingRef = ref(true)
@@ -767,9 +767,7 @@ const columnsRef = ref([
 onMounted(() => {
   // 获取主题配置
   GetConfig().then(result => {
-    if (result.darkTheme) {
-      darkTheme.value = true
-    }
+    darkTheme.value = !!result.darkTheme
   })
 
   loadingRef.value = true

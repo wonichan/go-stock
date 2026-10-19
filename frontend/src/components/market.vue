@@ -69,7 +69,7 @@ const other = ref([])
 const globalStockIndexes = ref(null)
 const summaryModal = ref(false)
 const summaryBTN = ref(true)
-const darkTheme = ref(false)
+const darkTheme = ref(true)
 const httpProxyEnabled = ref(false)
 const theme = computed(() => {
   return darkTheme ? 'dark' : 'light'
