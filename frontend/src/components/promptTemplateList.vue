@@ -19,7 +19,7 @@ const notify = useNotification()
 const message = useMessage()
 const dialog = useDialog()
 const editorDataRef = reactive({
-  darkTheme: false
+  darkTheme: true
 })
 const editorTheme = ref('light')
 

@@ -515,6 +515,41 @@ func UpdateAiConfigsOnly(aiConfigs []*AIConfig) string {
 	return "保存成功！"
 }
 
+// settingsMigrationMarker 一次性设置迁移标记（与 cron_migration_markers 同思路）。
+type settingsMigrationMarker struct {
+	Name      string `gorm:"primaryKey"`
+	CreatedAt time.Time
+}
+
+func (settingsMigrationMarker) TableName() string { return "settings_migration_markers" }
+
+const darkThemeDefaultMigration = "dark_theme_default_on_v1"
+
+// EnsureDarkThemeDefaultOnce 把已有设置中的亮色主题一次性改为暗色。
+// 只跑一次（settings_migration_markers 记标记）；之后用户在设置页关掉暗黑主题不会被改回。
+func EnsureDarkThemeDefaultOnce() (int64, error) {
+	if err := db.Dao.AutoMigrate(&settingsMigrationMarker{}); err != nil {
+		return 0, err
+	}
+	var changed int64
+	err := db.Dao.Transaction(func(tx *gorm.DB) error {
+		var n int64
+		if err := tx.Model(&settingsMigrationMarker{}).Where("name = ?", darkThemeDefaultMigration).Count(&n).Error; err != nil {
+			return err
+		}
+		if n > 0 {
+			return nil
+		}
+		res := tx.Model(&Settings{}).Where("dark_theme = ?", false).Update("dark_theme", true)
+		if res.Error != nil {
+			return res.Error
+		}
+		changed = res.RowsAffected
+		return tx.Create(&settingsMigrationMarker{Name: darkThemeDefaultMigration}).Error
+	})
+	return changed, err
+}
+
 func GetSettingConfig() *SettingConfig {
 	settingConfig := &SettingConfig{}
 	settings := &Settings{}

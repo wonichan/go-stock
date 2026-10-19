@@ -72,6 +72,11 @@ func (a *App) startup(ctx context.Context) {
 	defer PanicHandler()
 
 	data.ConfigureFromSettings(data.GetSettingConfig())
+	if n, err := data.EnsureDarkThemeDefaultOnce(); err != nil {
+		logger.SugaredLogger.Errorf("迁移暗黑主题默认值失败：%v", err)
+	} else if n > 0 {
+		logger.SugaredLogger.Infof("已将 %d 条设置迁移为暗黑主题", n)
+	}
 
 	runtime.EventsOn(ctx, "frontendError", func(optionalData ...interface{}) {
 		logger.SugaredLogger.Errorf("Frontend error: %v\n", optionalData)

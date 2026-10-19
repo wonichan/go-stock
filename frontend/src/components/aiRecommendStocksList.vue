@@ -28,9 +28,7 @@ const isValidVip=ref(false) // 是否是会员
 
 onBeforeMount(()=> {
   GetConfig().then(result => {
-    if (result.darkTheme) {
-      editorDataRef.darkTheme = true
-    }
+    editorDataRef.darkTheme = !!result.darkTheme
   })
 
   GetSponsorInfo().then((res) => {
@@ -75,7 +73,7 @@ const mdEditorRef = ref(null)
 const editorDataRef = reactive({
   show: false,
   loading: false,
-  darkTheme: false,
+  darkTheme: true,
   chatId: "",
   modelName: "",
   CreatedAt: "",

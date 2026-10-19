@@ -28,3 +28,15 @@ body {
 .md-editor-preview {
     padding: 0 8px !important;
 }
+
+/* Web/桌面暗黑主题：naive-ui 只染组件，不会染 html/body/#app，需自行铺暗色底，
+   否则会出现「表头暗、页面白」的撕裂感。由 App.vue 在暗色时给 <html> 加 go-stock-dark。 */
+html.go-stock-dark,
+html.go-stock-dark body,
+html.go-stock-dark #app {
+    background-color: rgb(16, 16, 20);
+    color: rgba(255, 255, 255, 0.82);
+}
+html.go-stock-dark body {
+    color-scheme: dark;
+}

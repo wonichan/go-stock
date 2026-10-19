@@ -25,7 +25,7 @@ watch(showKlineModal, (v) => {
 })
 const activeView = ref('ladder')
 const expandedLadders = ref([])
-const darkTheme = ref(false)
+const darkTheme = ref(true)
 
 function getCalendarTodayStr() {
   const t = new Date()
@@ -58,9 +58,7 @@ function stopAutoRefresh() {
 
 onBeforeMount(() => {
   GetConfig().then(result => {
-    if (result.darkTheme) {
-      darkTheme.value = true
-    }
+    darkTheme.value = !!result.darkTheme
   })
 
   const cal = getCalendarTodayStr()

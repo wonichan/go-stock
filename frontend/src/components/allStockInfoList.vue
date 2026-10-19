@@ -30,14 +30,12 @@ const notify = useNotification()
 const message = useMessage()
 
 const editorDataRef = reactive({
-  darkTheme: false
+  darkTheme: true
 })
 
 onBeforeMount(() => {
   GetConfig().then(result => {
-    if (result.darkTheme) {
-      editorDataRef.darkTheme = true
-    }
+    editorDataRef.darkTheme = !!result.darkTheme
   })
 })
 
